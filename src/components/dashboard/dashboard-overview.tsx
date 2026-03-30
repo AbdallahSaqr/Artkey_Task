@@ -18,7 +18,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { startOfMonth, endOfMonth, isWithinInterval, format, subMonths, isSameMonth, isPast, parseISO } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, format, subMonths, isSameMonth, parseISO } from 'date-fns';
 
 import { AssignmentTable } from '@/components/assignments/assignment-table';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
@@ -297,7 +297,7 @@ export function DashboardOverview() {
   const metricsData: Metric[] = useMemo(() => {
     const total = filteredData.length;
     const completed = filteredData.filter(a => a.status === 'Completed').length;
-    const overdue = filteredData.filter(a => (a.status as string) !== 'Completed' && isPast(parseISO(a.due_date))).length;
+    const overdue = filteredData.filter(a => a.status === 'Overdue').length;
     const rate = total > 0 ? ((completed / total) * 100).toFixed(1) : '0.0';
 
     return [

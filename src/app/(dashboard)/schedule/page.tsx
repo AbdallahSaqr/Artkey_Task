@@ -358,7 +358,7 @@ export default function SchedulePage() {
               </SelectContent>
             </Select>
 
-            <CreateScheduleDialog>
+            <CreateScheduleDialog onSuccess={fetchData}>
               <Button className="h-9 px-4 rounded-xl gap-2 font-medium tracking-tight text-xs">
                 <Plus size={15}/> New Schedule
               </Button>

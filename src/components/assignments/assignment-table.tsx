@@ -204,18 +204,14 @@ function AnimatedRow({
               </DropdownMenuItem>
             )}
 
-            {isAdmin && (
-              <>
-                <DropdownMenuSeparator className="bg-white/10 mx-[-6px] my-1.5" />
-                <DropdownMenuItem 
-                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(row.id); }}
-                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer hover:bg-rose-500/15 focus:bg-rose-500/15 text-rose-400/90 hover:text-rose-400 focus:text-rose-400 outline-none"
-                >
-                  <Trash2 size={14} />
-                  Delete Assignment
-                </DropdownMenuItem>
-              </>
-            )}
+            <DropdownMenuSeparator className="bg-white/10 mx-[-6px] my-1.5" />
+            <DropdownMenuItem 
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(row.id); }}
+              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer hover:bg-rose-500/15 focus:bg-rose-500/15 text-rose-400/90 hover:text-rose-400 focus:text-rose-400 outline-none"
+            >
+              <Trash2 size={14} />
+              Delete Assignment
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>

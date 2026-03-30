@@ -187,18 +187,18 @@ export default function SettingsPage() {
             h-auto + py-1.5 lets each trigger set its own height naturally,
             preventing the strip from being too short to contain its content. */}
         <TabsList className="flex w-full mb-4 bg-muted/20 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl h-auto gap-1">
-          <TabsTrigger value="profile" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs">
-            <User size={15} /> Profile
+          <TabsTrigger value="profile" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs justify-center">
+            <User size={18} className="md:size-[15px]" /> <span className="hidden md:inline">Profile</span>
           </TabsTrigger>
-          <TabsTrigger value="preferences" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs">
-            <Palette size={15} /> Preferences
+          <TabsTrigger value="preferences" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs justify-center">
+            <Palette size={18} className="md:size-[15px]" /> <span className="hidden md:inline">Preferences</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs">
-            <Bell size={15} /> Webhooks
+          <TabsTrigger value="notifications" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-all font-bold tracking-tight text-xs justify-center">
+            <Bell size={18} className="md:size-[15px]" /> <span className="hidden md:inline">Webhooks</span>
           </TabsTrigger>
           {profile?.role === 'Admin' && (
-            <TabsTrigger value="advanced" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-rose-500/10 data-[state=active]:text-rose-500 transition-all font-bold tracking-tight text-xs">
-              <Shield size={15} /> Advanced
+            <TabsTrigger value="advanced" className="flex-1 rounded-xl py-3 gap-2 data-[state=active]:bg-rose-500/10 data-[state=active]:text-rose-500 transition-all font-bold tracking-tight text-xs justify-center">
+              <Shield size={18} className="md:size-[15px]" /> <span className="hidden md:inline">Advanced</span>
             </TabsTrigger>
           )}
         </TabsList>
