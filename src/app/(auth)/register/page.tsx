@@ -33,10 +33,16 @@ export default function RegisterPage() {
           data: {
             full_name: fullName,
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.toLowerCase().includes('rate limit')) {
+          throw new Error('Too many sign-up attempts. Please wait a few minutes and try again.');
+        }
+        throw error;
+      }
 
       toast.success('Credentials requested. Please verify your email.');
       router.push('/login');
