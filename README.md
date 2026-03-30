@@ -9,7 +9,7 @@
 
 An end-to-end task orchestration platform built with Next.js, Supabase, and Gemini. It combines assignment operations, recurring schedule automation, real-time updates, role-aware access, and AI-assisted task creation in one full-stack application.
 
-Live deployment placeholder: [Live Demo](https://your-vercel-link.vercel.app)
+Live deployment placeholder: [Live Demo](https://artkey-task-manager.vercel.app/)
 
 ## Table of Contents
 
