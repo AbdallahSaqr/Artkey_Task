@@ -510,7 +510,7 @@ export default function SettingsPage() {
                           </div>
                           <Select
                             value={u.role ?? ''}
-                            onValueChange={(val) => handleRoleChange(u.id, val)}
+                            onValueChange={(val) => { if (val !== null) handleRoleChange(u.id, val); }}
                             disabled={updatingUserId === u.id}
                           >
                             <SelectTrigger className="w-[120px] h-9 rounded-xl border-white/10 bg-white/5 text-xs font-bold tracking-tight shrink-0 cursor-pointer">
