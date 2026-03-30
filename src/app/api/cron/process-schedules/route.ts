@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getDay, getDate, getHours } from 'date-fns';
+import { getDay, getDate } from 'date-fns';
 
 export async function GET(request: Request) {
   // 1. Verify Vercel Cron Secret (Authorization Header)
@@ -41,63 +41,69 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'No active schedules found at this time.', created: 0 });
     }
 
-    // 4. Calculate current time metrics using date-fns
+    // 4. Calculate current date metrics
     const now = new Date();
-    const currentHour = getHours(now);
     const currentDayOfWeek = getDay(now); // 0 (Sunday) to 6 (Saturday)
     const currentDateOfMonth = getDate(now); // 1 to 31
 
     const assignmentsToInsert = [];
     const processedScheduleIds = [];
 
-    // 5. Iterate to find schedules matching the current time criteria
+    // 5. Iterate schedules due for today (Hobby plans only run cron once/day)
     for (const schedule of schedules) {
-      let isMatch = false;
+      const recurrence = String(schedule.recurrence_type || '').toLowerCase();
+      const weeklyDays = Array.isArray(schedule.days_of_week)
+        ? schedule.days_of_week
+        : (schedule.run_day_of_week !== undefined && schedule.run_day_of_week !== null
+            ? [schedule.run_day_of_week]
+            : []);
+      const monthlyDates = Array.isArray(schedule.dates_of_month)
+        ? schedule.dates_of_month
+        : (schedule.run_date_of_month !== undefined && schedule.run_date_of_month !== null
+            ? [schedule.run_date_of_month]
+            : []);
 
-      // Extract expected hour structure, fallback to 0 if undefined
-      const targetHour = schedule.run_hour ?? 0;
-
-      switch (schedule.recurrence_type) {
-        case 'daily':
-          // Standard daily job matches if hours align
-          if (targetHour === currentHour) {
-            isMatch = true;
-          }
-          break;
-        case 'weekly':
-          // Must match day of the week & hour
-          if (schedule.run_day_of_week === currentDayOfWeek && targetHour === currentHour) {
-            isMatch = true;
-          }
-          break;
-        case 'monthly':
-          // Must match date of the month & hour
-          if (schedule.run_date_of_month === currentDateOfMonth && targetHour === currentHour) {
-            isMatch = true;
-          }
-          break;
-        default:
-          break;
+      let isDueToday = false;
+      if (recurrence === 'daily') {
+        isDueToday = true;
+      } else if (recurrence === 'weekly') {
+        isDueToday = weeklyDays.includes(currentDayOfWeek);
+      } else if (recurrence === 'monthly') {
+        isDueToday = monthlyDates.includes(currentDateOfMonth);
       }
 
-      // Check if this schedule matched the criteria AND hasn't already run in the current hour to prevent duplicates
-      if (isMatch) {
-        const lastRun = schedule.last_run_at ? new Date(schedule.last_run_at) : null;
-        // Check if last run was less than ~1 hour ago to safeguard against rapid repeated hooks
-        const hasRunRecently = lastRun && now.getTime() - lastRun.getTime() < 60 * 60 * 1000;
+      if (!isDueToday) continue;
 
-        if (!hasRunRecently) {
-          assignmentsToInsert.push({
-            title: schedule.title,
-            description: schedule.description || '',
-            priority: schedule.priority || 'Medium',
-            status: 'Pending',
-            // Assign dummy 7 days due date, should be handled correctly by application logic depending on schedule specifications
-            due_date: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
-          });
-          processedScheduleIds.push(schedule.id);
-        }
+      const lastRun = schedule.last_run_at ? new Date(schedule.last_run_at) : null;
+      const hasRunToday =
+        lastRun &&
+        lastRun.getFullYear() === now.getFullYear() &&
+        lastRun.getMonth() === now.getMonth() &&
+        lastRun.getDate() === now.getDate();
+
+      if (hasRunToday) continue;
+
+      let dueDate = new Date(now);
+      const triggerTime = typeof schedule.trigger_time === 'string' ? schedule.trigger_time : '';
+      if (triggerTime.includes(':')) {
+        const [hStr, mStr] = triggerTime.split(':');
+        const h = Number(hStr);
+        const m = Number(mStr);
+        dueDate.setHours(Number.isFinite(h) ? h : 9, Number.isFinite(m) ? m : 0, 0, 0);
+      } else {
+        const h = Number.isFinite(schedule.run_hour) ? schedule.run_hour : 9;
+        dueDate.setHours(h, 0, 0, 0);
       }
+
+      assignmentsToInsert.push({
+        title: schedule.title,
+        description: schedule.description || '',
+        priority: schedule.priority || 'Medium',
+        status: 'Pending',
+        due_date: dueDate.toISOString(),
+        created_by_user_id: schedule.created_by_user_id || null,
+      });
+      processedScheduleIds.push(schedule.id);
     }
 
     let createdCount = 0;

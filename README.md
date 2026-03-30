@@ -1,4 +1,4 @@
-# Assignment Management Dashboard
+# Artkey Assignment Management Dashboard
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
@@ -7,132 +7,345 @@
 ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v4-38bdf8?logo=tailwindcss&logoColor=white)
 ![Jest](https://img.shields.io/badge/Tested%20with-Jest-c21325?logo=jest&logoColor=white)
 
-## 1. Project Overview and Live Demo
+An end-to-end task orchestration platform built with Next.js, Supabase, and Gemini. It combines assignment operations, recurring schedule automation, real-time updates, role-aware access, and AI-assisted task creation in one full-stack application.
 
-Assignment Management Dashboard is a full-stack productivity platform built with Next.js App Router, Supabase, and Google Gemini AI. It combines task orchestration, recurring schedule automation, role-aware operations, and real-time analytics in a single modern web application.
+Live deployment placeholder: [Live Demo](https://your-vercel-link.vercel.app)
 
-It is designed for teams that need:
-- Assignment lifecycle management
-- Automated schedule-driven task generation
-- AI-assisted natural-language task creation
-- Operational visibility through live dashboard metrics
+## Table of Contents
 
-Live deployment:
-[Live Demo](https://your-vercel-link.vercel.app)
+1. Product Overview
+2. System Architecture
+3. How It Works End to End
+4. Detailed Build Journey
+5. Project Structure
+6. Data Model and Relationships
+7. Local Setup and Installation
+8. Environment Variables
+9. Running the App
+10. API Endpoints
+11. Scheduling and Cron Strategy
+12. Authentication and Authorization
+13. Testing
+14. Deployment on Vercel
+15. Troubleshooting
+16. Roadmap
 
-## 2. Tech Stack
+## 1. Product Overview
 
-- Next.js (App Router)
-- Supabase (Auth, Postgres, Realtime)
-- Tailwind CSS
-- Shadcn UI
-- Framer Motion
-- Google Gemini API
+This dashboard was designed for teams managing recurring and ad hoc work across multiple users. The app solves five core problems:
 
-## 3. Core Features and Architecture
+- Assignment lifecycle management: create, view, update, and delete tasks with priority, due date, and status.
+- Assignee-aware visibility: users only see assignments linked to them.
+- Recurring automation: daily, weekly, and monthly schedule templates that materialize into assignments.
+- Insightful analytics: metrics and chart-based trends with live updates.
+- Conversational task entry: AI translates natural language into structured task payloads with a confirmation step.
 
-### A. CRUD Operations
-- Create assignments with metadata including title, description, priority, due date, assignees, and tags.
-- Read assignment data in table and detail views.
-- Update assignment state (status transitions and activity log tracking).
-- Delete operations with role-aware UI controls.
+## 2. System Architecture
 
-### B. Cron Scheduling Engine
-- Recurrence models: Daily, Weekly (specific weekdays), Monthly (specific month dates).
-- Trigger-time based schedule execution.
-- Backend cron route evaluates current time window and generates assignments from active schedules.
-- Pause and resume toggles control schedule activity state.
+The architecture is split into four cooperating layers:
 
-How it works at a high level:
-1. Schedules are persisted with recurrence metadata.
-2. A cron trigger calls the internal processing endpoint.
-3. Matching schedules are resolved by recurrence rules and trigger time.
-4. New assignments are inserted and schedule run-state is updated.
+- Presentation layer: Next.js App Router pages and client components.
+- Application layer: route handlers for AI and cron processing.
+- Data layer: Supabase Postgres tables, relational links, and activity logs.
+- Identity and access layer: Supabase Auth, route middleware, role checks, and assignment link scoping.
 
-### C. Real-time Analytics Dashboard
-- Top-level KPIs: total, completed, overdue, completion rate.
-- Recharts visual trend area chart for completion patterns.
-- Real-time updates via Supabase change streams.
-- Global filters for status, priority, assignee, and date range.
+High-level flow:
 
-### D. NLP AI Assistant
-- Google Gemini parses conversational input into structured assignment intent.
-- AI output is normalized to JSON before insertion.
-- Human-in-the-loop confirmation card previews task details before database write.
+1. User authenticates through Supabase Auth.
+2. Middleware protects dashboard routes and redirects unauthorized users.
+3. Frontend loads assignment and schedule data using scoped queries.
+4. User actions write to Postgres and update notifications and timeline logs.
+5. Realtime subscriptions refresh views when data changes.
+6. Cron route periodically converts schedule definitions into assignment records.
+7. AI route converts free text into JSON task intent and returns a preview for confirmation.
 
-### E. Role-Based Access Control (RBAC)
-- Supabase Auth secures user identity and session flow.
-- Middleware guards protected routes and redirects unauthenticated users.
-- Role metadata (for example Admin vs Member) drives privileged UI actions.
+## 3. How It Works End to End
 
-## 4. Local Setup and Installation
+### Assignment creation path
 
-### Prerequisites
-- Node.js 18+ (recommended)
+1. User opens the assignment dialog and enters task details.
+2. App inserts a row in assignments with creator metadata.
+3. App inserts links in assignment_assignees.
+4. If no assignee is selected, creator is auto-assigned by default.
+5. If assignee link insertion fails, assignment is rolled back to prevent orphan tasks.
+6. Optional tags are added through assignment_tags.
+7. Notification is generated.
+
+### Assignment visibility path
+
+1. User identity is resolved from Supabase session.
+2. If role is Admin, all assignments are loaded.
+3. If role is non-admin, assignments are loaded strictly via assignment_assignees links.
+4. UI assignee labels are hydrated by joining assignment_assignees to profiles.
+
+### AI assistant path
+
+1. User sends natural language prompt in assistant sheet.
+2. Client sends message and conversation history to internal AI route.
+3. Gemini model returns strict JSON payload.
+4. Client renders a confirmation card before insert.
+5. On confirm, assignment is inserted and creator-assignee link is written.
+
+### Recurring schedule path
+
+1. User creates schedule with recurrence type and timing.
+2. Schedule record persists recurrence metadata and status.
+3. Vercel cron calls internal processing route once daily.
+4. Route computes which schedules are due for today.
+5. Route inserts due assignments and updates schedule run timestamp.
+
+## 4. Detailed Build Journey
+
+This section explains the implementation process step by step.
+
+### Step 1: Core project scaffolding
+
+- Next.js App Router foundation.
+- Tailwind and component primitives.
+- Routing structure for auth and dashboard sections.
+
+### Step 2: Auth and guarded navigation
+
+- Supabase browser and server client setup.
+- Session middleware for route protection.
+- Login and registration screens.
+
+### Step 3: Assignment domain
+
+- Assignment table rendering and status actions.
+- Assignment detail sheet with timeline events.
+- Multi-assignee and tag management through junction tables.
+
+### Step 4: Schedule automation
+
+- Schedule creation UI for Daily, Weekly, Monthly patterns.
+- Calendar views and schedule cards.
+- Pause and resume toggle with persistence.
+
+### Step 5: Analytics
+
+- KPI cards and chart trend visualization.
+- Global filters and scoped dataset recalculation.
+- Realtime updates via Supabase channel subscriptions.
+
+### Step 6: AI integration
+
+- Internal chat route for Gemini prompt orchestration.
+- Structured JSON extraction from free text.
+- Confirmation-first insertion strategy.
+
+### Step 7: Hardening and production behavior
+
+- Assignment visibility scoping by relational links.
+- Creator metadata on assignment creation.
+- Default creator assignment when no assignee selected.
+- Rollback strategy to prevent unassigned orphan records.
+- Vercel Hobby-compatible cron strategy.
+
+## 5. Project Structure
+
+Key directories:
+
+- src/app
+	- Auth routes
+	- Dashboard routes
+	- API route handlers
+- src/components
+	- Domain components (assignments, schedule, dashboard, AI)
+	- Shared UI primitives
+- src/lib
+	- Supabase clients
+	- Export utilities
+	- Seed and mock helpers
+- src/hooks
+	- Realtime subscription hooks
+- src/__tests__ and __tests__
+	- Unit and rendering tests
+
+## 6. Data Model and Relationships
+
+Core entities:
+
+- profiles
+	- User profile and role metadata.
+- assignments
+	- Main task records, status, due date, creator metadata.
+- assignment_assignees
+	- Junction table linking assignment_id to user_id.
+- assignment_tags
+	- Assignment-to-tag relation.
+- assignment_activity_logs
+	- Immutable timeline of changes.
+- schedules
+	- Recurrence definitions and processing state.
+- notifications
+	- User-facing event feed.
+- webhooks
+	- External integration targets.
+
+Relational principles:
+
+- assignment_assignees is the source of truth for who can see a task.
+- assignment_activity_logs tracks status changes and actor context.
+- schedule processing writes assignments in bulk for due schedules.
+
+For full SQL definition and constraints, use the project schema file in your database migration source.
+
+## 7. Local Setup and Installation
+
+Prerequisites:
+
+- Node.js 18 or newer
 - npm
 - Supabase project
 - Gemini API key
 
-### Install
-```bash
-git clone https://github.com/your-org/your-repo.git
-cd your-repo
-npm install
-```
+Install steps:
 
-### Environment Variables
-Create a .env.local file in the project root:
+1. Clone repository
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
-CRON_SECRET=
-```
+	 git clone https://github.com/your-org/your-repo.git
 
-### Run Locally
-```bash
+2. Move into project folder
+
+	 cd your-repo
+
+3. Install dependencies
+
+	 npm install
+
+## 8. Environment Variables
+
+Create a file named .env.local in the project root.
+
+Required values:
+
+- NEXT_PUBLIC_SUPABASE_URL=
+- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=
+- SUPABASE_SERVICE_ROLE_KEY=
+- GEMINI_API_KEY=
+- CRON_SECRET=
+
+Notes:
+
+- Never commit real keys.
+- Use separate Supabase projects for development and production.
+
+## 9. Running the App
+
+Development server:
+
 npm run dev
-```
 
-Application starts at:
+Default URL:
+
 http://localhost:3000
 
-## 5. Database Schema
+Production build check:
 
-The app uses a relational Supabase Postgres model centered around:
+1. npm run build
+2. npm run start
 
-- Profiles: user identity, role, and account metadata
-- Assignments: task records with status, priority, due date, and ownership context
-- Schedules: recurring automation definitions (daily, weekly, monthly with trigger timing)
-- Tags and Junction Tables: many-to-many relationships for assignment and schedule categorization
-- Activity Logs: immutable audit entries for assignment state transitions
-- Notifications and Webhooks: operational eventing and external integration hooks
+## 10. API Endpoints
 
-For full DDL and constraints, see schema.sql.
+### AI chat endpoint
 
-## 6. API and Testing
+- Method: POST
+- Path: /api/chat
+- Purpose: convert conversational prompt into structured assignment intent JSON.
 
-### Running Tests
-Run the Jest suite locally:
+### Cron processing endpoint
 
-```bash
+- Method: GET
+- Path: /api/cron/process-schedules
+- Purpose: process due schedules and generate assignments.
+- Security: requires Bearer token matching CRON_SECRET.
+
+## 11. Scheduling and Cron Strategy
+
+Current strategy is designed for Vercel Hobby constraints.
+
+- Cron runs once daily.
+- Processing route determines which schedules are due today.
+- Daily schedules run every day.
+- Weekly schedules run when today matches configured day list.
+- Monthly schedules run when today matches configured date list.
+- Duplicate creation is prevented by last_run_at day checks.
+
+Vercel cron config is in vercel.json.
+
+## 12. Authentication and Authorization
+
+Authentication:
+
+- Supabase Auth handles login and registration.
+- Middleware protects dashboard routes.
+
+Authorization:
+
+- Role values in profiles determine admin capabilities.
+- Non-admin visibility is scoped by assignment_assignees links.
+- Admin users can view full assignment dataset.
+
+For hardened production security, enforce equivalent logic with Supabase Row Level Security policies.
+
+## 13. Testing
+
+Run test suite:
+
 npm run test
-```
 
-### Internal Cron API
-Core cron trigger endpoint:
+Current test coverage includes:
 
-- GET /api/cron/process-schedules
+- Basic smoke checks
+- Dashboard metrics rendering and computation behavior
 
-Purpose:
-- Validates cron authorization secret
-- Fetches active schedules
-- Resolves recurrence matches for the current execution window
-- Creates assignment records for matched schedules
-- Updates schedule run metadata to prevent duplicate execution bursts
+If tests fail due to environment gaps, ensure Jest setup includes browser polyfills required by export-related dependencies.
+
+## 14. Deployment on Vercel
+
+Recommended deployment steps:
+
+1. Connect repository to Vercel.
+2. Configure all environment variables in Vercel project settings.
+3. Confirm cron schedule in vercel.json matches plan limits.
+4. Ensure CRON_SECRET in Vercel matches route validation.
+5. Deploy and validate AI, auth, and schedule processing flows.
+
+## 15. Troubleshooting
+
+### Symptom: user sees wrong assignment set
+
+- Verify assignment_assignees rows exist for expected assignment_id and user_id pairs.
+- Verify user role in profiles.
+- Verify RLS policies permit expected reads.
+
+### Symptom: assignment appears without assignee
+
+- Creation flow should auto-assign creator when no assignee selected.
+- If link insertion fails, creation should roll back.
+- Validate foreign key and RLS behavior on assignment_assignees.
+
+### Symptom: cron not running as expected
+
+- Verify Vercel plan cron limits.
+- Verify CRON_SECRET header.
+- Check route logs for schedule matching details.
+
+### Symptom: AI task creation fails
+
+- Verify GEMINI_API_KEY exists and has quota.
+- Confirm model availability and API plan.
+- Check API response parsing logs.
+
+## 16. Roadmap
+
+- Add server-side policy tests for access rules.
+- Add integration tests for schedule processing.
+- Add richer assignment edit workflow and audit details.
+- Add webhook event delivery retries and monitoring.
+- Add stronger AI schema validation and fallback providers.
 
 ---
 
-If you are deploying to Vercel, configure environment variables in project settings and wire a scheduled job to call /api/cron/process-schedules with the correct bearer token.
+If you use this project as a foundation, treat assignment_assignees and RLS as primary security controls, and keep client-side filtering only as a presentation layer safeguard.
