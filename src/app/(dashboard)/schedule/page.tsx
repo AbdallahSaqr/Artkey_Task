@@ -96,12 +96,6 @@ export default function SchedulePage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: sRes, error: sErr } = await supabase.from('schedules').select('*').order('created_at', { ascending: false });
-
-      if (sErr) throw sErr;
-
-      setSchedules(sRes || []);
-
       const {
         data: { user },
         error: userError,
@@ -109,6 +103,7 @@ export default function SchedulePage() {
 
       if (userError) throw userError;
       if (!user) {
+        setSchedules([]);
         setAllAssignments([]);
         return;
       }
@@ -121,6 +116,40 @@ export default function SchedulePage() {
 
       if (profileError) throw profileError;
 
+      // ── Fetch schedules scoped by user ──
+      if (profile?.role === 'Admin') {
+        const { data: sRes, error: sErr } = await supabase
+          .from('schedules')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (sErr) throw sErr;
+        setSchedules(sRes || []);
+      } else {
+        const { data: scheduleLinks, error: slErr } = await supabase
+          .from('schedule_assignees')
+          .select('schedule_id')
+          .eq('user_id', user.id);
+
+        if (slErr) throw slErr;
+
+        const scheduleIds = (scheduleLinks || []).map((r: { schedule_id: string }) => r.schedule_id);
+
+        if (scheduleIds.length > 0) {
+          const { data: sRes, error: sErr } = await supabase
+            .from('schedules')
+            .select('*')
+            .in('id', scheduleIds)
+            .order('created_at', { ascending: false });
+
+          if (sErr) throw sErr;
+          setSchedules(sRes || []);
+        } else {
+          setSchedules([]);
+        }
+      }
+
+      // ── Fetch assignments scoped by user ──
       if (profile?.role === 'Admin') {
         const { data: aRes, error: aErr } = await supabase
           .from('assignments')
@@ -417,12 +446,7 @@ export default function SchedulePage() {
                   exit={{ opacity: 0, y: -10 }}
                   className="flex flex-col h-full bg-muted/10"
                 >
-                  <div className="grid grid-cols-7 border-b border-border/50">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                      <div key={d} className="text-center py-3 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">{d}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 flex-1">
+                  <div className="flex flex-col flex-1 divide-y divide-border/40">
                     {calendarDays.map((date) => {
                       const daySchedules = getSchedulesForDay(date);
                       const isSelected = isSameDay(date, selectedDate);
@@ -431,28 +455,34 @@ export default function SchedulePage() {
                           key={date.toString()} 
                           onClick={() => handleDayClick(date)}
                           className={cn(
-                            "min-h-[400px] border-r border-border/40 p-3 flex flex-col gap-4 hover:bg-primary/[0.03] transition-colors cursor-pointer",
-                            isSelected && "bg-primary/[0.05] ring-inset ring-1 ring-primary/20",
+                            "flex items-center gap-4 px-4 hover:bg-primary/[0.03] transition-colors cursor-pointer flex-1",
+                            isSelected && "bg-primary/[0.05]",
                             isToday(date) && "bg-primary/[0.02]"
                           )}
                         >
-                          <div className="flex flex-col items-center gap-1.5">
-                             <span className="text-[10px] uppercase font-bold text-muted-foreground/40">{format(date, 'MMM')}</span>
+                          <div className="flex items-center gap-3 shrink-0 w-28">
                              <span className={cn(
-                               "w-8 h-8 flex items-center justify-center text-sm font-bold rounded-full",
+                               "w-9 h-9 flex items-center justify-center text-sm font-bold rounded-full shrink-0",
                                isToday(date) ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : (isSelected ? "text-primary" : "text-foreground/80")
                              )}>
                                {format(date, 'd')}
                              </span>
+                             <div className="flex flex-col">
+                               <span className="text-xs font-bold text-foreground/80">{format(date, 'EEE')}</span>
+                               <span className="text-[10px] text-muted-foreground/50 uppercase font-medium">{format(date, 'MMM')}</span>
+                             </div>
                           </div>
-                          <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                             {daySchedules.length === 0 && (
+                               <span className="text-[11px] text-muted-foreground/30 font-medium italic py-2">No schedules</span>
+                             )}
                              {daySchedules.map((s, idx) => (
                                <div key={`${s.id}-${idx}`} className={cn(
-                                 "p-2.5 rounded-2xl border text-[10px] font-bold shadow-sm leading-[1.3] transition-transform hover:scale-[1.02]",
+                                 "px-3 py-2 rounded-2xl border text-[11px] font-bold shadow-sm leading-[1.3] transition-transform hover:scale-[1.02] whitespace-nowrap",
                                  s.is_paused ? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20" : 
                                  (s.priority === 'High' ? "bg-rose-500/10 text-rose-500 border-rose-500/20" : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20")
                                )}>
-                                 <span className="block opacity-50 mb-1">{s.trigger_time?.slice(0,5)}</span>
+                                 <span className="opacity-50 mr-1.5">{s.trigger_time?.slice(0,5)}</span>
                                  {s.title}
                                </div>
                              ))}

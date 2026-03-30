@@ -48,7 +48,7 @@ interface Assignment {
   assignee: string;
   due_date: string;
   priority: 'High' | 'Medium' | 'Low';
-  status: 'Pending' | 'In Progress' | 'Completed' | 'Overdue' | 'Cancelled';
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Overdue';
   created_at: string;
 }
 

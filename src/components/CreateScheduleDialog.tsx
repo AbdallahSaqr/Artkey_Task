@@ -99,7 +99,9 @@ export function CreateScheduleDialog({ children, onSuccess }: { children: React.
   async function onSubmit(data: FormValues) {
     setIsSubmitting(true);
     try {
-      const run_hour = parseInt(data.trigger_time.split(':')[0], 10);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { data: newSched, error } = await supabase
         .from('schedules')
         .insert({
@@ -115,6 +117,21 @@ export function CreateScheduleDialog({ children, onSuccess }: { children: React.
         .select().single();
 
       if (error) throw error;
+
+      // Link assignees via schedule_assignees junction table (always include creator)
+      const assigneeIds = selectedAssignees.length > 0
+        ? Array.from(new Set([user.id, ...selectedAssignees]))
+        : [user.id];
+
+      const { error: linkError } = await supabase
+        .from('schedule_assignees')
+        .insert(assigneeIds.map(uid => ({ schedule_id: newSched.id, user_id: uid })));
+
+      if (linkError) {
+        // Rollback schedule if linking fails
+        await supabase.from('schedules').delete().eq('id', newSched.id);
+        throw new Error('Failed to link assignees to schedule.');
+      }
 
       // Handle junction table for Tags
       if (selectedTags.length > 0) {

@@ -166,6 +166,9 @@ export default function AssignmentsPage() {
         toast.success('Assignment marked as complete (Mock)');
         return;
       }
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
       
       const { error: updateError } = await supabase
         .from('assignments')
@@ -182,7 +185,7 @@ export default function AssignmentsPage() {
           action_type: 'status_change',
           previous_value: oldStatus,
           new_value: 'Completed',
-          user_name: 'Artkey System'
+          user_id: user?.id || null
         });
       
       if (logError) {
