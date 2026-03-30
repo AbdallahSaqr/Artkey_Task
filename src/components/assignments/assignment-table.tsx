@@ -249,7 +249,7 @@ export function AssignmentTable({ data, onComplete, onDelete, onRefresh, loading
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex flex-col gap-6 w-full mb-10">
       <div className="rounded-3xl bg-card/60 backdrop-blur-md border border-border/50 shadow-2xl ring-1 ring-white/5">
         <div className="px-5 py-3 border-b border-border/50 bg-white/5 flex items-center justify-between">
             <h3 className="text-sm font-bold tracking-tight text-foreground/80 uppercase">Assignments List</h3>
