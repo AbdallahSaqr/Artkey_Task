@@ -56,6 +56,8 @@ export function CreateAssignmentDialog({ children, onSuccess }: { children: Reac
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const supabase = createClient();
   const form = useForm<FormValues>({
@@ -72,12 +74,30 @@ export function CreateAssignmentDialog({ children, onSuccess }: { children: Reac
 
   async function fetchInitialData() {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let userRole: string | null = null;
+      if (user) {
+        setCurrentUserId(user.id);
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile) {
+          userRole = profile.role;
+          setCurrentUserRole(profile.role);
+        }
+      }
+
       const [templRes, usersRes] = await Promise.all([
         supabase.from('assignment_templates').select('*'),
-        supabase.from('profiles').select('id, full_name, role') // Assuming profiles table for users
+        supabase.from('profiles').select('id, full_name, role')
       ]);
       if (templRes.data) setTemplates(templRes.data);
-      if (usersRes.data) setUsers(usersRes.data);
+      if (usersRes.data) {
+        // Members can only assign themselves
+        if (user && userRole !== 'Admin') {
+          setUsers(usersRes.data.filter((u: any) => u.id === user.id));
+        } else {
+          setUsers(usersRes.data);
+        }
+      }
     } catch (e) {
       console.error('Data fetch error:', e);
     }

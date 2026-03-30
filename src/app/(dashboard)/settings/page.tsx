@@ -17,7 +17,10 @@ import {
   Moon,
   Sun,
   Camera,
-  Upload
+  Upload,
+  Users,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { seedMockData } from '@/lib/seed';
@@ -41,6 +44,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SettingsPage() {
   const [isSeeding, setIsSeeding] = useState(false);
@@ -50,6 +60,9 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState('');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [allUsers, setAllUsers] = useState<{ id: string; full_name: string | null; email: string | null; role: string }[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   
   const { theme, setTheme } = useTheme();
   const supabase = createClient();
@@ -75,10 +88,70 @@ export default function SettingsPage() {
           .select('target_url')
           .maybeSingle();
         if (wData) setWebhookUrl(wData.target_url);
+
+        if (pData?.role === 'Admin') {
+          fetchAllUsers();
+        }
       }
     }
     loadData();
   }, [supabase]);
+
+  async function fetchAllUsers() {
+    setLoadingUsers(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, role')
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+
+      // Get emails from auth — we'll use the current user's email for display
+      // For other users, we show their profile name
+      const users = (data || []).map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name,
+        email: null,
+        role: p.role || 'Member',
+      }));
+
+      setAllUsers(users);
+    } catch (err: any) {
+      toast.error('Failed to load users: ' + err.message);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
+  async function handleRoleChange(userId: string, newRole: string) {
+    setUpdatingUserId(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+
+      // If the admin changed their own role, update local profile state
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && userId === user.id) {
+        setProfile(prev => prev ? { ...prev, role: newRole } : null);
+      }
+
+      toast.success('Role updated successfully.');
+    } catch (err: any) {
+      toast.error('Failed to update role: ' + err.message);
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
  
   async function handleUploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -409,6 +482,66 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
+              <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl overflow-hidden shadow-xl ring-1 ring-white/5 border-violet-500/10">
+                <CardHeader className="p-5 pb-3 border-b border-violet-500/5 bg-violet-500/5">
+                  <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
+                    <Users size={18} className="text-violet-400" /> Role Management
+                  </CardTitle>
+                  <CardDescription className="text-xs font-medium text-muted-foreground/60">Assign Admin or Member roles to registered users.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-3">
+                  {loadingUsers ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="animate-spin text-muted-foreground" size={20} />
+                    </div>
+                  ) : allUsers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-6">No users found.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                      {allUsers.map((u) => (
+                        <div key={u.id} className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary ring-1 ring-white/10 shrink-0">
+                              {(u.full_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <span className="text-sm font-medium tracking-tight text-foreground truncate">
+                              {u.full_name || 'Unnamed User'}
+                            </span>
+                          </div>
+                          <Select
+                            value={u.role}
+                            onValueChange={(val) => handleRoleChange(u.id, val)}
+                            disabled={updatingUserId === u.id}
+                          >
+                            <SelectTrigger className="w-[120px] h-9 rounded-xl border-white/10 bg-white/5 text-xs font-bold tracking-tight shrink-0 cursor-pointer">
+                              {updatingUserId === u.id ? (
+                                <Loader2 className="animate-spin" size={14} />
+                              ) : (
+                                <SelectValue />
+                              )}
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-white/10 rounded-xl">
+                              <SelectItem value="Admin" className="text-xs font-bold cursor-pointer">
+                                <span className="flex items-center gap-2">
+                                  <Shield size={12} className="text-violet-400" /> Admin
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="Member" className="text-xs font-bold cursor-pointer">
+                                <span className="flex items-center gap-2">
+                                  <User size={12} className="text-emerald-400" /> Member
+                                </span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl overflow-hidden shadow-xl ring-1 ring-white/5">
                 <CardHeader className="p-5 pb-3 border-b border-white/5 bg-white/5">
                   <CardTitle className="text-lg font-bold tracking-tight">Deployment Status</CardTitle>

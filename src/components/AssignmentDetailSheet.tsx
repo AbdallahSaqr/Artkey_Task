@@ -33,6 +33,7 @@ interface Assignment {
   due_date: string;
   assignee?: string;
   tags?: string[];
+  created_by?: string;
 }
 
 interface ActivityLog {
@@ -59,8 +60,22 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange, onStat
   const [assignees, setAssignees] = useState<string[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (data) setCurrentUserRole(data.role);
+      }
+    }
+    loadUser();
+  }, [supabase]);
 
   useEffect(() => {
     if (open && assignmentId) {
@@ -367,14 +382,16 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange, onStat
                </div>
 
                <div className="pt-2">
-                 <Button
-                   variant="ghost"
-                   onClick={handleDelete}
-                   className="w-full h-11 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 gap-2 font-medium tracking-tight text-sm cursor-pointer"
-                 >
-                   <Trash2 size={15} />
-                   Delete Assignment
-                 </Button>
+                 {(currentUserRole === 'Admin' || (currentUserId && assignment.created_by === currentUserId)) && (
+                   <Button
+                     variant="ghost"
+                     onClick={handleDelete}
+                     className="w-full h-11 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 gap-2 font-medium tracking-tight text-sm cursor-pointer"
+                   >
+                     <Trash2 size={15} />
+                     Delete Assignment
+                   </Button>
+                 )}
                </div>
              </div>
           ) : (

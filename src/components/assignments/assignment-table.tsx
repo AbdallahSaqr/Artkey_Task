@@ -46,6 +46,7 @@ interface Assignment {
   due_date: string;
   priority: 'High' | 'Medium' | 'Low';
   status: Status;
+  created_by?: string;
 }
 
 // ── Status badge config ──────────────────────────────────────────────────
@@ -95,13 +96,16 @@ function AnimatedRow({
   onDelete,
   onSelect,
   isAdmin,
+  currentUserId,
 }: {
   row: Assignment;
   onComplete: (id: string) => void;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   isAdmin?: boolean;
+  currentUserId?: string;
 }) {
+  const canDelete = isAdmin || (currentUserId && row.created_by === currentUserId);
   return (
     <motion.tr
       key={row.id}
@@ -204,14 +208,18 @@ function AnimatedRow({
               </DropdownMenuItem>
             )}
 
-            <DropdownMenuSeparator className="bg-white/10 mx-[-6px] my-1.5" />
-            <DropdownMenuItem 
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(row.id); }}
-              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer hover:bg-rose-500/15 focus:bg-rose-500/15 text-rose-400/90 hover:text-rose-400 focus:text-rose-400 outline-none"
-            >
-              <Trash2 size={14} />
-              Delete Assignment
-            </DropdownMenuItem>
+            {canDelete && (
+              <>
+                <DropdownMenuSeparator className="bg-white/10 mx-[-6px] my-1.5" />
+                <DropdownMenuItem 
+                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(row.id); }}
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer hover:bg-rose-500/15 focus:bg-rose-500/15 text-rose-400/90 hover:text-rose-400 focus:text-rose-400 outline-none"
+                >
+                  <Trash2 size={14} />
+                  Delete Assignment
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>
@@ -232,12 +240,14 @@ export function AssignmentTable({ data, onComplete, onDelete, onRefresh, loading
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
     async function getRole() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setUserId(user.id);
         const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
         if (data) setRole(data.role);
       }
@@ -305,6 +315,7 @@ export function AssignmentTable({ data, onComplete, onDelete, onRefresh, loading
                       onDelete={onDelete!}
                       onSelect={handleSelect}
                       isAdmin={role === 'Admin'}
+                      currentUserId={userId || undefined}
                     />
                   ))
                 )}
