@@ -23,7 +23,7 @@ export default function RootLayout({
       className={`${inter.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="h-full bg-background text-foreground transition-colors duration-300 overflow-hidden">
+      <body className="h-full bg-background text-foreground transition-colors duration-300">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

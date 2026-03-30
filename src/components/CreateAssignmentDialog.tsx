@@ -130,7 +130,7 @@ export function CreateAssignmentDialog({ children, onSuccess }: { children: Reac
           priority: data.priority,
           due_date: data.due_date,
           status: 'Pending',
-          created_by_user_id: user.id,
+          created_by: user.id,
         })
         .select()
         .single();

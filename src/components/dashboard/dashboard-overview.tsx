@@ -369,7 +369,7 @@ export function DashboardOverview() {
   }, [allAssignments]);
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-7xl mx-auto w-full md:min-h-screen">
+    <div className="flex flex-col gap-8 p-6 max-w-7xl mx-auto w-full min-h-full pb-40">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Overview</h1>
         <p className="text-sm text-muted-foreground tracking-tight">

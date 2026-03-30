@@ -297,7 +297,7 @@ export default function SchedulePage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl mx-auto p-4 md:p-6 md:min-h-full md:overflow-y-auto no-scrollbar pb-10">
+    <div className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl mx-auto p-4 md:p-6 min-h-full pb-40 no-scrollbar">
       
       {/* ── Calendar Section ────────────────────────────────────────────────── */}
       <motion.div 

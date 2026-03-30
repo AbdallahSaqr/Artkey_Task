@@ -101,7 +101,7 @@ export async function GET(request: Request) {
         priority: schedule.priority || 'Medium',
         status: 'Pending',
         due_date: dueDate.toISOString(),
-        created_by_user_id: schedule.created_by_user_id || null,
+        created_by: schedule.created_by || null,
       });
       processedScheduleIds.push(schedule.id);
     }

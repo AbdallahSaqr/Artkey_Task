@@ -163,7 +163,7 @@ export function AIAssistantSheet({
           priority: priority || 'Medium',
           status: 'Pending',
           due_date: dueDate,
-          created_by_user_id: user.id,
+          created_by: user.id,
         }).select('id').single();
         error = res.error;
         createdAssignmentId = res.data?.id || null;

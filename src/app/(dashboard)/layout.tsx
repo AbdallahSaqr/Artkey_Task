@@ -11,13 +11,13 @@ export default function DashboardLayout({
     <>
       <TopHeader />
       {/* ── Main responsive frame beneath the fixed header ─────────────────── */}
-      <div className="flex flex-1 pt-14 md:h-screen md:overflow-hidden">
+      <div className="flex flex-1 pt-14 h-screen overflow-hidden">
         
         {/* ── Desktop Sidebar (Hidden on md and below) ──────────────────── */}
         <Sidebar />
 
         {/* ── Scrollable core content area ────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto flex flex-col min-w-0 md:h-full relative no-scrollbar">
+        <main className="flex-1 overflow-y-auto flex flex-col min-w-0 h-full relative no-scrollbar">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
