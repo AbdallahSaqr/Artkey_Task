@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
-import { Calendar, User, Info, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, User, Info, CheckCircle2, Clock, AlertCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { MOCK_ASSIGNMENTS, MOCK_HISTORY } from '@/lib/mocks';
@@ -28,7 +29,7 @@ interface Assignment {
   title: string;
   description: string | null;
   priority: 'High' | 'Medium' | 'Low';
-  status: 'Pending' | 'In Progress' | 'Completed' | 'Overdue' | 'Cancelled';
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Overdue';
   due_date: string;
   assignee?: string;
   tags?: string[];
@@ -40,7 +41,8 @@ interface ActivityLog {
   action_type: string;
   previous_value: string | null;
   new_value: string;
-  user_name?: string;
+  user_id?: string;
+  profiles?: { full_name: string } | null;
   created_at: string;
 }
 
@@ -48,10 +50,13 @@ interface Props {
   assignmentId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onStatusChange?: () => void;
+  onDelete?: () => void;
 }
 
-export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Props) {
+export function AssignmentDetailSheet({ assignmentId, open, onOpenChange, onStatusChange, onDelete }: Props) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [assignees, setAssignees] = useState<string[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -64,6 +69,7 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
       // Clean up for smooth transition
       setTimeout(() => {
         setAssignment(null);
+        setAssignees([]);
         setLogs([]);
       }, 300);
     }
@@ -85,16 +91,28 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
     }
 
     try {
-      const [assignmentRes, logsRes] = await Promise.all([
+      const [assignmentRes, logsRes, assigneesRes] = await Promise.all([
         supabase.from('assignments').select('*').eq('id', id).single(),
         supabase.from('assignment_activity_logs')
-          .select('*')
+          .select('*, profiles!assignment_activity_logs_user_id_fkey(full_name)')
           .eq('assignment_id', id)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase.from('assignment_assignees')
+          .select('profiles!assignment_assignees_user_id_fkey(full_name)')
+          .eq('assignment_id', id),
       ]);
 
       if (assignmentRes.error) throw assignmentRes.error;
       setAssignment(assignmentRes.data as Assignment);
+
+      if (assigneesRes.data) {
+        const names = assigneesRes.data
+          .map((r: any) => r.profiles?.full_name as string)
+          .filter(Boolean);
+        setAssignees(names);
+      } else {
+        setAssignees([]);
+      }
       
       if (logsRes.error) {
         console.warn('Logs fetch ignored:', logsRes.error);
@@ -117,6 +135,14 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
 
     const oldStatus = assignment.status;
 
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    let userName = 'Unknown';
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      if (profile?.full_name) userName = profile.full_name;
+    }
+
     // Optimistic UI mutation
     setAssignment({ ...assignment, status: newStatus });
     
@@ -126,7 +152,8 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
       action_type: 'status_change',
       previous_value: oldStatus,
       new_value: newStatus,
-      user_name: 'Artkey Admin',
+      user_id: user?.id,
+      profiles: { full_name: userName },
       created_at: new Date().toISOString(),
     };
     
@@ -153,6 +180,7 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
           action_type: 'status_change',
           previous_value: oldStatus,
           new_value: newStatus,
+          user_id: user?.id || null,
         });
 
       await supabase.from('notifications').insert({
@@ -162,11 +190,41 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
       });
       
       toast.success(`Status updated to ${newStatus}`);
-      fetchDetails(assignment.id); // Force refresh to ensure sync
+      onStatusChange?.();
     } catch (error: any) {
       setAssignment({ ...assignment, status: oldStatus });
       setLogs(prev => prev.filter((l) => l.id !== optimisticLog.id));
       toast.error('Failed to update status.');
+    }
+  }
+
+  async function handleDelete() {
+    if (!assignment) return;
+    if (!confirm(`Are you sure you want to delete "${assignment.title}"?`)) return;
+
+    if (assignment.id.startsWith('mock-')) {
+      toast.success('Assignment deleted (Mock)');
+      onOpenChange(false);
+      onDelete?.();
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('assignments').delete().eq('id', assignment.id);
+      if (error) throw error;
+
+      await supabase.from('notifications').insert({
+        title: 'Assignment Deleted',
+        message: `The assignment "${assignment.title}" was removed.`,
+        is_read: false,
+      });
+
+      toast.success('Assignment deleted successfully.');
+      onOpenChange(false);
+      onDelete?.();
+      onStatusChange?.();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete assignment.');
     }
   }
 
@@ -236,9 +294,15 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
                   )}
 
                   <div className="flex flex-wrap items-center gap-3">
-                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-background/50 border border-white/10 rounded-full text-xs font-medium text-muted-foreground tracking-tight max-w-[50%] truncate">
-                       <User size={13} className="shrink-0" /> {assignment.assignee || 'Unassigned'}
-                     </div>
+                     {assignees.length > 0 ? assignees.map((name, i) => (
+                       <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-background/50 border border-white/10 rounded-full text-xs font-medium text-muted-foreground tracking-tight">
+                         <User size={13} className="shrink-0" /> {name}
+                       </div>
+                     )) : (
+                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-background/50 border border-white/10 rounded-full text-xs font-medium text-muted-foreground tracking-tight">
+                         <User size={13} className="shrink-0" /> {assignment.assignee || 'Unassigned'}
+                       </div>
+                     )}
                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-background/50 border border-white/10 rounded-full text-xs font-medium text-muted-foreground tracking-tight">
                        <Calendar size={13} className="shrink-0" /> 
                        {assignment.due_date ? format(new Date(assignment.due_date), 'MMM d, yyyy') : 'No Date'}
@@ -259,7 +323,6 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
                      <SelectItem value="In Progress">In Progress</SelectItem>
                      <SelectItem value="Completed">Completed</SelectItem>
                      <SelectItem value="Overdue">Overdue</SelectItem>
-                     <SelectItem value="Cancelled">Cancelled</SelectItem>
                    </SelectContent>
                  </Select>
                </div>
@@ -291,7 +354,7 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
                              ) : (
                                <>{log.action_type}</>
                              )}
-                             <span className="text-muted-foreground/60 ml-1.5 text-[11px]">by {log.user_name || 'System'}</span>
+                             <span className="text-muted-foreground/60 ml-1.5 text-[11px]">by {log.profiles?.full_name || 'System'}</span>
                            </p>
                            <time className="text-[11px] font-medium tracking-tight text-muted-foreground/70">
                              {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
@@ -301,6 +364,17 @@ export function AssignmentDetailSheet({ assignmentId, open, onOpenChange }: Prop
                      ))}
                    </motion.div>
                  )}
+               </div>
+
+               <div className="pt-2">
+                 <Button
+                   variant="ghost"
+                   onClick={handleDelete}
+                   className="w-full h-11 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 gap-2 font-medium tracking-tight text-sm cursor-pointer"
+                 >
+                   <Trash2 size={15} />
+                   Delete Assignment
+                 </Button>
                </div>
              </div>
           ) : (

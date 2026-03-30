@@ -37,7 +37,7 @@ import { ExportDialog } from '@/components/ExportDialog';
 import { AssignmentSkeleton } from './assignment-skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────
-type Status = 'Pending' | 'In Progress' | 'Completed' | 'Overdue' | 'Cancelled';
+type Status = 'Pending' | 'In Progress' | 'Completed' | 'Overdue';
 
 interface Assignment {
   id: string;
@@ -126,12 +126,24 @@ function AnimatedRow({
         <span className="text-sm font-medium tracking-tight text-foreground">{row.title}</span>
       </TableCell>
       <TableCell className="py-3.5">
-        <span className="inline-flex items-center gap-2 text-sm text-muted-foreground tracking-tight">
-          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground ring-1 ring-white/10 shrink-0">
-            {row.assignee ? row.assignee.split(' ').map((n) => n[0]).join('') : 'U'}
-          </span>
-          {row.assignee || 'Unassigned'}
-        </span>
+        {(() => {
+          const names = row.assignee ? row.assignee.split(', ').filter(Boolean) : [];
+          const first = names[0] || 'Unassigned';
+          const extra = names.length > 1 ? names.length - 1 : 0;
+          return (
+            <span className="inline-flex items-center gap-2 text-sm text-muted-foreground tracking-tight">
+              <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground ring-1 ring-white/10 shrink-0">
+                {first.split(' ').map((n) => n[0]).join('')}
+              </span>
+              {first}
+              {extra > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                  +{extra}
+                </span>
+              )}
+            </span>
+          );
+        })()}
       </TableCell>
       <TableCell className="py-3.5">
         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground tracking-tight">
@@ -167,7 +179,7 @@ function AnimatedRow({
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
             className={cn(
                 buttonVariants({ variant: "ghost" }),
-                "h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/10 rounded-xl flex items-center justify-center border-0 cursor-pointer"
+                "h-8 w-8 p-0 transition-opacity hover:bg-white/10 rounded-xl flex items-center justify-center border-0 cursor-pointer"
             )}
           >
             <span className="sr-only">Open menu</span>
@@ -315,7 +327,9 @@ export function AssignmentTable({ data, onComplete, onDelete, onRefresh, loading
       <AssignmentDetailSheet 
         assignmentId={selectedId} 
         open={sheetOpen} 
-        onOpenChange={setSheetOpen} 
+        onOpenChange={setSheetOpen}
+        onStatusChange={onRefresh}
+        onDelete={onRefresh}
       />
     </div>
   );
