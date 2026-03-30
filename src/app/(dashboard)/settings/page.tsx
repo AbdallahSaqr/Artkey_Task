@@ -509,7 +509,7 @@ export default function SettingsPage() {
                             </span>
                           </div>
                           <Select
-                            value={u.role}
+                            value={u.role ?? ''}
                             onValueChange={(val) => handleRoleChange(u.id, val)}
                             disabled={updatingUserId === u.id}
                           >
