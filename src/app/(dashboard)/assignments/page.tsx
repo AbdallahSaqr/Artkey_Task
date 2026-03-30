@@ -223,7 +223,7 @@ export default function AssignmentsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-7xl mx-auto w-full min-h-full">
+    <div className="flex flex-col gap-8 p-6 max-w-7xl mx-auto w-full md:min-h-full">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Assignments</h1>
