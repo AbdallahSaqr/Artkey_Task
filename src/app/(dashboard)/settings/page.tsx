@@ -20,7 +20,12 @@ import {
   Upload,
   Users,
   ChevronDown,
-  Loader2
+  Loader2,
+  BookOpen,
+  Pencil,
+  Trash2,
+  Check,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { seedMockData } from '@/lib/seed';
@@ -32,6 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   AlertDialog,
@@ -63,6 +69,18 @@ export default function SettingsPage() {
   const [allUsers, setAllUsers] = useState<{ id: string; full_name: string | null; email: string | null; role: string }[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [templateTitle, setTemplateTitle] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [templatePriority, setTemplatePriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [assignmentTemplates, setAssignmentTemplates] = useState<{ id: string; title: string; description: string | null; priority: 'Low' | 'Medium' | 'High'; created_at: string }[]>([]);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editTemplateTitle, setEditTemplateTitle] = useState('');
+  const [editTemplateDescription, setEditTemplateDescription] = useState('');
+  const [editTemplatePriority, setEditTemplatePriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  const [savingTemplateId, setSavingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   
   const { theme, setTheme } = useTheme();
   const supabase = createClient();
@@ -91,11 +109,29 @@ export default function SettingsPage() {
 
         if (pData?.role === 'Admin') {
           fetchAllUsers();
+          fetchAssignmentTemplates();
         }
       }
     }
     loadData();
   }, [supabase]);
+
+  async function fetchAssignmentTemplates() {
+    setLoadingTemplates(true);
+    try {
+      const { data, error } = await supabase
+        .from('assignment_templates')
+        .select('id, title, description, priority, created_at')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAssignmentTemplates((data || []) as { id: string; title: string; description: string | null; priority: 'Low' | 'Medium' | 'High'; created_at: string }[]);
+    } catch (err: any) {
+      toast.error('Failed to load templates: ' + err.message);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
 
   async function fetchAllUsers() {
     setLoadingUsers(true);
@@ -150,6 +186,170 @@ export default function SettingsPage() {
       toast.error('Failed to update role: ' + err.message);
     } finally {
       setUpdatingUserId(null);
+    }
+  }
+
+  async function handleCreateAssignmentTemplate() {
+    const trimmedTitle = templateTitle.trim();
+    const trimmedDescription = templateDescription.trim();
+    if (!trimmedTitle) {
+      toast.error('Template title is required.');
+      return;
+    }
+
+    setIsCreatingTemplate(true);
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticTemplate = {
+      id: optimisticId,
+      title: trimmedTitle,
+      description: trimmedDescription || null,
+      priority: templatePriority,
+      created_at: new Date().toISOString(),
+    };
+
+    setAssignmentTemplates(prev => [optimisticTemplate, ...prev]);
+    setTemplateTitle('');
+    setTemplateDescription('');
+    setTemplatePriority('Medium');
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('assignment_templates')
+        .insert({
+          title: trimmedTitle,
+          description: trimmedDescription || null,
+          priority: templatePriority,
+          created_by: user.id,
+        })
+        .select('id, title, description, priority, created_at')
+        .single();
+
+      if (error) throw error;
+
+      setAssignmentTemplates(prev =>
+        prev.map(template =>
+          template.id === optimisticId
+            ? (data as { id: string; title: string; description: string | null; priority: 'Low' | 'Medium' | 'High'; created_at: string })
+            : template
+        )
+      );
+      toast.success('Assignment template created.');
+    } catch (err: any) {
+      setAssignmentTemplates(prev => prev.filter(template => template.id !== optimisticId));
+      setTemplateTitle(trimmedTitle);
+      setTemplateDescription(trimmedDescription);
+      setTemplatePriority(templatePriority);
+      toast.error('Failed to create template: ' + err.message);
+    } finally {
+      setIsCreatingTemplate(false);
+    }
+  }
+
+  function startEditingTemplate(template: { id: string; title: string; description: string | null; priority: 'Low' | 'Medium' | 'High' }) {
+    setEditingTemplateId(template.id);
+    setEditTemplateTitle(template.title);
+    setEditTemplateDescription(template.description || '');
+    setEditTemplatePriority(template.priority);
+  }
+
+  function cancelEditingTemplate() {
+    setEditingTemplateId(null);
+    setEditTemplateTitle('');
+    setEditTemplateDescription('');
+    setEditTemplatePriority('Medium');
+  }
+
+  async function handleUpdateAssignmentTemplate(templateId: string) {
+    const trimmedTitle = editTemplateTitle.trim();
+    const trimmedDescription = editTemplateDescription.trim();
+    if (!trimmedTitle) {
+      toast.error('Template title is required.');
+      return;
+    }
+
+    const previousTemplate = assignmentTemplates.find(template => template.id === templateId);
+    if (!previousTemplate) {
+      toast.error('Template not found.');
+      return;
+    }
+
+    setSavingTemplateId(templateId);
+    setAssignmentTemplates(prev =>
+      prev.map(template =>
+        template.id === templateId
+          ? {
+              ...template,
+              title: trimmedTitle,
+              description: trimmedDescription || null,
+              priority: editTemplatePriority,
+            }
+          : template
+      )
+    );
+    cancelEditingTemplate();
+
+    try {
+      const { error } = await supabase
+        .from('assignment_templates')
+        .update({
+          title: trimmedTitle,
+          description: trimmedDescription || null,
+          priority: editTemplatePriority,
+        })
+        .eq('id', templateId);
+
+      if (error) throw error;
+
+      toast.success('Assignment template updated.');
+    } catch (err: any) {
+      setAssignmentTemplates(prev =>
+        prev.map(template => (template.id === previousTemplate.id ? previousTemplate : template))
+      );
+      startEditingTemplate(previousTemplate);
+      toast.error('Failed to update template: ' + err.message);
+    } finally {
+      setSavingTemplateId(null);
+    }
+  }
+
+  async function handleDeleteAssignmentTemplate(templateId: string) {
+    const deletedIndex = assignmentTemplates.findIndex(template => template.id === templateId);
+    const deletedTemplate = deletedIndex >= 0 ? assignmentTemplates[deletedIndex] : null;
+    if (!deletedTemplate) {
+      toast.error('Template not found.');
+      return;
+    }
+
+    setDeletingTemplateId(templateId);
+    setAssignmentTemplates(prev => prev.filter(template => template.id !== templateId));
+    const wasEditingDeletedTemplate = editingTemplateId === templateId;
+    if (wasEditingDeletedTemplate) {
+      cancelEditingTemplate();
+    }
+
+    try {
+      const { error } = await supabase
+        .from('assignment_templates')
+        .delete()
+        .eq('id', templateId);
+
+      if (error) throw error;
+      toast.success('Assignment template deleted.');
+    } catch (err: any) {
+      setAssignmentTemplates(prev => {
+        const next = [...prev];
+        next.splice(deletedIndex, 0, deletedTemplate);
+        return next;
+      });
+      if (wasEditingDeletedTemplate) {
+        startEditingTemplate(deletedTemplate);
+      }
+      toast.error('Failed to delete template: ' + err.message);
+    } finally {
+      setDeletingTemplateId(null);
     }
   }
  
@@ -542,6 +742,188 @@ export default function SettingsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl overflow-hidden shadow-xl ring-1 ring-white/5 border-blue-500/10">
+                <CardHeader className="p-5 pb-3 border-b border-blue-500/5 bg-blue-500/5">
+                  <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
+                    <BookOpen size={18} className="text-blue-400" /> Assignment Templates
+                  </CardTitle>
+                  <CardDescription className="text-xs font-medium text-muted-foreground/60">Create reusable templates used in assignment creation flows.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="template_title" className="text-xs font-bold tracking-tight text-muted-foreground ml-1">Template Title</Label>
+                    <Input
+                      id="template_title"
+                      value={templateTitle}
+                      onChange={(e) => setTemplateTitle(e.target.value)}
+                      className="h-11 bg-white/5 border-white/10 rounded-xl focus-visible:ring-primary/30"
+                      placeholder="Weekly Design Review"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template_description" className="text-xs font-bold tracking-tight text-muted-foreground ml-1">Description</Label>
+                    <Textarea
+                      id="template_description"
+                      value={templateDescription}
+                      onChange={(e) => setTemplateDescription(e.target.value)}
+                      className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-primary/30 min-h-[84px]"
+                      placeholder="Define the objective and expected outcome..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold tracking-tight text-muted-foreground ml-1">Priority</Label>
+                    <Select
+                      value={templatePriority}
+                      onValueChange={(val) => {
+                        if (val !== null) {
+                          setTemplatePriority(val as 'Low' | 'Medium' | 'High');
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl focus-visible:ring-primary/30">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card/95 backdrop-blur-xl border-white/10 rounded-xl">
+                        <SelectItem value="Low" className="text-xs font-bold cursor-pointer">Low</SelectItem>
+                        <SelectItem value="Medium" className="text-xs font-bold cursor-pointer">Medium</SelectItem>
+                        <SelectItem value="High" className="text-xs font-bold cursor-pointer">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    onClick={handleCreateAssignmentTemplate}
+                    disabled={isCreatingTemplate}
+                    className="w-full h-11 rounded-xl font-bold tracking-tight gap-2"
+                  >
+                    {isCreatingTemplate ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                    Create Template
+                  </Button>
+
+                  <div className="pt-2 border-t border-white/5">
+                    <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-2">Existing Templates</p>
+                    {loadingTemplates ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="animate-spin text-muted-foreground" size={16} />
+                      </div>
+                    ) : assignmentTemplates.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No templates created yet.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                        {assignmentTemplates.map((template) => (
+                          <div key={template.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                            {editingTemplateId === template.id ? (
+                              <div className="space-y-2">
+                                <Input
+                                  value={editTemplateTitle}
+                                  onChange={(e) => setEditTemplateTitle(e.target.value)}
+                                  className="h-9 bg-white/5 border-white/10 rounded-lg text-xs font-bold tracking-tight"
+                                  placeholder="Template title"
+                                />
+                                <Textarea
+                                  value={editTemplateDescription}
+                                  onChange={(e) => setEditTemplateDescription(e.target.value)}
+                                  className="bg-white/5 border-white/10 rounded-lg min-h-[68px] text-xs"
+                                  placeholder="Template description"
+                                />
+                                <Select
+                                  value={editTemplatePriority}
+                                  onValueChange={(val) => {
+                                    if (val !== null) {
+                                      setEditTemplatePriority(val as 'Low' | 'Medium' | 'High');
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="h-9 bg-white/5 border-white/10 rounded-lg text-xs font-bold tracking-tight">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-card/95 backdrop-blur-xl border-white/10 rounded-xl">
+                                    <SelectItem value="Low" className="text-xs font-bold cursor-pointer">Low</SelectItem>
+                                    <SelectItem value="Medium" className="text-xs font-bold cursor-pointer">Medium</SelectItem>
+                                    <SelectItem value="High" className="text-xs font-bold cursor-pointer">High</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    onClick={() => handleUpdateAssignmentTemplate(template.id)}
+                                    disabled={savingTemplateId === template.id}
+                                    className="h-8 px-3 rounded-lg text-[11px] font-bold tracking-tight gap-1.5"
+                                  >
+                                    {savingTemplateId === template.id ? <Loader2 className="animate-spin" size={12} /> : <Check size={12} />}
+                                    Save
+                                  </Button>
+                                  <Button
+                                    onClick={cancelEditingTemplate}
+                                    variant="outline"
+                                    className="h-8 px-3 rounded-lg text-[11px] font-bold tracking-tight gap-1.5 border-white/10 bg-white/5 hover:bg-white/10"
+                                  >
+                                    <X size={12} />
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-bold tracking-tight text-foreground truncate">{template.title}</p>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 font-bold text-muted-foreground">{template.priority}</span>
+                                    <Button
+                                      onClick={() => startEditingTemplate(template)}
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg hover:bg-white/10"
+                                    >
+                                      <Pencil size={12} />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger
+                                        render={
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                                            disabled={deletingTemplateId === template.id}
+                                          >
+                                            {deletingTemplateId === template.id ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
+                                          </Button>
+                                        }
+                                      />
+                                      <AlertDialogContent className="bg-card/95 backdrop-blur-3xl border-border/50 rounded-[24px] p-6 shadow-2xl">
+                                        <AlertDialogHeader className="space-y-2">
+                                          <AlertDialogTitle className="text-lg font-black tracking-tight text-rose-500">Delete Template</AlertDialogTitle>
+                                          <AlertDialogDescription className="text-sm font-medium text-muted-foreground/80">
+                                            This will permanently delete the template "{template.title}".
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter className="mt-6 gap-2 sm:gap-0">
+                                          <AlertDialogCancel className="h-10 rounded-xl border-white/10 bg-white/5 font-bold tracking-tight">Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => handleDeleteAssignmentTemplate(template.id)}
+                                            className="h-10 rounded-xl bg-rose-500 text-white hover:bg-rose-600 font-bold tracking-tight"
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </div>
+                                {template.description && (
+                                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{template.description}</p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl overflow-hidden shadow-xl ring-1 ring-white/5">
                 <CardHeader className="p-5 pb-3 border-b border-white/5 bg-white/5">
                   <CardTitle className="text-lg font-bold tracking-tight">Deployment Status</CardTitle>
