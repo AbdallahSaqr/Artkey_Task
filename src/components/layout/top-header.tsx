@@ -18,13 +18,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from '@/lib/supabase/client';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+
+type ProfileRow = {
+  full_name: string | null;
+  role: string;
+  avatar_url: string | null;
+};
+
+function isProfileRow(value: unknown): value is ProfileRow {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.role === 'string' &&
+    ('full_name' in candidate) &&
+    ('avatar_url' in candidate)
+  );
+}
 
 export function TopHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const [profile, setProfile] = useState<{ full_name: string | null; role: string; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | null = null;
@@ -53,8 +70,10 @@ export function TopHeader() {
             table: 'profiles',
             filter: `id=eq.${user.id}`,
           },
-          (payload) => {
-            setProfile(payload.new as any);
+          (payload: RealtimePostgresChangesPayload<ProfileRow>) => {
+            if (isProfileRow(payload.new)) {
+              setProfile(payload.new);
+            }
           }
         )
         .subscribe();

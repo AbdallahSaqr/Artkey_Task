@@ -11,10 +11,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ intent: 'reply', response: "You must be logged in to use the AI assistant." });
     }
 
+    const currentUserId = user.id;
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', currentUserId)
       .single();
     
     const userRole = profile?.role || 'Member';
@@ -320,7 +322,7 @@ Rules:
       const { data: linkRows, error: linkError } = await supabase
         .from('assignment_assignees')
         .select('assignment_id')
-        .eq('user_id', user.id);
+        .eq('user_id', currentUserId);
 
       if (linkError) {
         return { data: [], error: linkError };
@@ -355,7 +357,7 @@ Rules:
       const { data: linkRows, error: linkError } = await supabase
         .from('schedule_assignees')
         .select('schedule_id')
-        .eq('user_id', user.id);
+        .eq('user_id', currentUserId);
 
       if (linkError) {
         return { data: [], error: linkError };
@@ -532,7 +534,7 @@ Rules:
       let query = supabase.from(target === 'schedules' ? 'schedules' : 'assignments').select('*');
       
       // We only fetch for the current user to respect privacy
-      query = query.eq('created_by', user.id);
+      query = query.eq('created_by', currentUserId);
 
       if (target === 'assignments') {
          if (timeframe === 'today' || specific_date) {
@@ -620,7 +622,7 @@ Rules:
        if (!title) return NextResponse.json({ intent: 'reply', response: "Please provide a title for the template." });
 
        const { error } = await supabase.from('assignment_templates').insert({
-          title, description: description || '', priority: priority || 'Medium', created_by: user.id
+         title, description: description || '', priority: priority || 'Medium', created_by: currentUserId
        });
 
        if (error) return NextResponse.json({ intent: 'reply', response: `Failed to create template: ${error.message}` });
