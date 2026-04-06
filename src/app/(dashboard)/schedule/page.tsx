@@ -211,6 +211,17 @@ export default function SchedulePage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const onAIMutation = () => {
+      fetchData();
+    };
+
+    window.addEventListener('artkey:data-mutated', onAIMutation);
+    return () => {
+      window.removeEventListener('artkey:data-mutated', onAIMutation);
+    };
+  }, [fetchData]);
+
   // --- Date Computation Helpers ---
   const calendarDays = useMemo(() => {
     if (calendarView === 'monthly') {

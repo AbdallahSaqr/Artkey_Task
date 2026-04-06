@@ -24,16 +24,33 @@ interface ChatMessage {
   id: string;
   role: Role;
   content: string;
+  dataView?: DataViewPayload;
+  capabilities?: string[];
+}
+
+interface DataViewPayload {
+  type: 'assignments' | 'schedules';
+  timeframe: 'today' | 'week' | 'month' | 'all';
+  items: any[];
+}
+
+interface ActionPayload {
+  entity: 'assignment' | 'schedule' | 'template';
+  operation: 'create' | 'update' | 'delete';
+  count?: number;
 }
 
 interface PendingAssignmentJSON {
-  intent: 'create_task' | 'insufficient_info';
+  intent: 'create_task' | 'create_schedule' | 'insufficient_info' | 'reply';
   title?: string;
   description?: string;
   recurrence_type?: 'None' | 'Daily' | 'Weekly' | 'Monthly';
   trigger_time?: string;
   priority?: 'Low' | 'Medium' | 'High';
   response?: string;
+  data_view?: DataViewPayload;
+  action?: ActionPayload;
+  capabilities?: string[];
 }
 
 export function AIAssistantSheet({
@@ -54,11 +71,18 @@ export function AIAssistantSheet({
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignmentJSON | null>(null);
   
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, pendingAssignment]);
+
+  useEffect(() => {
+    if (open && !isLoading && pendingAssignment === null) {
+      inputRef.current?.focus();
+    }
+  }, [open, isLoading, pendingAssignment]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,16 +115,22 @@ export function AIAssistantSheet({
 
       const data: PendingAssignmentJSON = await res.json();
 
-      if (data.intent === 'insufficient_info') {
+      if (data.action) {
+        window.dispatchEvent(new CustomEvent('artkey:data-mutated', { detail: data.action }));
+      }
+
+      if (data.intent === 'insufficient_info' || data.intent === 'reply') {
         setChatHistory((prev) => [
           ...prev,
           {
             id: Date.now().toString(),
             role: 'assistant',
             content: data.response || "I need a bit more context. What is the title and schedule for this task?",
+            dataView: data.data_view,
+            capabilities: data.capabilities,
           },
         ]);
-      } else if (data.intent === 'create_task') {
+      } else if (data.intent === 'create_task' || data.intent === 'create_schedule') {
         setPendingAssignment(data);
       }
     } catch (error: any) {
@@ -117,6 +147,11 @@ export function AIAssistantSheet({
       ]);
     } finally {
       setIsLoading(false);
+      requestAnimationFrame(() => {
+        if (pendingAssignment === null) {
+          inputRef.current?.focus();
+        }
+      });
     }
   }
 
@@ -146,10 +181,11 @@ export function AIAssistantSheet({
           title,
           description: description || '',
           priority: priority || 'Medium',
-          recurrence_type: recurrence_type.toLowerCase(),
-          run_hour,
+          recurrence_type: recurrence_type, // Enum expects 'Daily', 'Weekly', 'Monthly'
+          trigger_time: trigger_time ? `${trigger_time}:00` : '09:00:00', // TIME type format
           is_paused: false,
-        });
+          created_by: user.id
+        }).select('id').single();
         error = res.error;
       } else {
         // Use the AI-extracted due_date, or default to 7 days from now
@@ -185,6 +221,14 @@ export function AIAssistantSheet({
           ? 'Recurring schedule successfully created.'
           : 'Assignment successfully created.'
       );
+
+      window.dispatchEvent(new CustomEvent('artkey:data-mutated', {
+        detail: {
+          entity: recurrence_type && recurrence_type !== 'None' ? 'schedule' : 'assignment',
+          operation: 'create',
+          count: 1,
+        },
+      }));
       
       setPendingAssignment(null);
       setChatHistory((prev) => [
@@ -250,7 +294,44 @@ export function AIAssistantSheet({
                       : 'bg-muted/50 backdrop-blur-md text-foreground border border-border/50 rounded-bl-sm'
                   }`}
                 >
-                  {msg.content}
+                  <p>{msg.content}</p>
+                  {msg.role === 'assistant' && msg.dataView && msg.dataView.items.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {msg.dataView.items.slice(0, 8).map((item: any) => (
+                        <div key={item.id} className="rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs">
+                          <div className="font-semibold text-foreground truncate">{item.title}</div>
+                          {msg.dataView?.type === 'assignments' ? (
+                            <div className="mt-1 flex flex-wrap gap-2 text-muted-foreground">
+                              <span>Status: {item.status || 'Unknown'}</span>
+                              <span>Priority: {item.priority || 'Medium'}</span>
+                              <span>Due: {item.due_date ? new Date(item.due_date).toLocaleString() : 'N/A'}</span>
+                            </div>
+                          ) : (
+                            <div className="mt-1 flex flex-wrap gap-2 text-muted-foreground">
+                              <span>Priority: {item.priority || 'Medium'}</span>
+                              <span>Recurrence: {item.recurrence_type || 'N/A'}</span>
+                              <span>Time: {item.trigger_time ? String(item.trigger_time).slice(0, 5) : 'N/A'}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {msg.dataView.items.length > 8 && (
+                        <p className="text-[11px] text-muted-foreground">
+                          +{msg.dataView.items.length - 8} more
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {msg.role === 'assistant' && msg.capabilities && msg.capabilities.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {msg.capabilities.map((item, idx) => (
+                        <div key={`${msg.id}-cap-${idx}`} className="rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs text-foreground/90">
+                          <span className="font-semibold text-primary mr-2">{idx + 1}.</span>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -339,6 +420,7 @@ export function AIAssistantSheet({
             className="flex items-center gap-3 bg-muted p-2 rounded-full border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-lg"
           >
             <Input
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading || pendingAssignment !== null}

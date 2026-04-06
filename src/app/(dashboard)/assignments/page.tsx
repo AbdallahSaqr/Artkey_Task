@@ -143,6 +143,17 @@ export default function AssignmentsPage() {
     fetchAssignments();
   }, [fetchAssignments]);
 
+  useEffect(() => {
+    const onAIMutation = () => {
+      fetchAssignments();
+    };
+
+    window.addEventListener('artkey:data-mutated', onAIMutation);
+    return () => {
+      window.removeEventListener('artkey:data-mutated', onAIMutation);
+    };
+  }, [fetchAssignments]);
+
   const filteredAssignments = useMemo(() => {
     return assignments.filter((item) => {
       const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 

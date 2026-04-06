@@ -265,6 +265,17 @@ export function DashboardOverview() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const onAIMutation = () => {
+      fetchData();
+    };
+
+    window.addEventListener('artkey:data-mutated', onAIMutation);
+    return () => {
+      window.removeEventListener('artkey:data-mutated', onAIMutation);
+    };
+  }, [fetchData]);
+
   // Real-time listener
   useRealtime('assignments', fetchData);
   useRealtime('schedules', fetchData);
